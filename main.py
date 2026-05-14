@@ -22,9 +22,9 @@ TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
 INSTANCE = os.getenv("IBM_QUANTUM_INSTANCE")
 
 QiskitRuntimeService.save_account(
-token=TOKEN, # Use the 44-character API_KEY you created and saved from the IBM Quantum Platform Home dashboard
-instance=INSTANCE, # Optional
-overwrite=True
+    token=TOKEN, # Use the 44-character API_KEY you created and saved from the IBM Quantum Platform Home dashboard
+    instance=INSTANCE, # Optional
+    overwrite=True
 )
 
 # =====================================================
@@ -155,129 +155,122 @@ resultados_reais = {}
 for i, (qc, nome) in enumerate(circuitos):
 
     counts_real = real_result[i].data.c.get_counts()
-
     resultados_reais[nome] = counts_real
 
     print(f"\nResultado REAL {nome}")
     print(counts_real)
 
 # =====================================================
-# TESTAR DIFERENTES RUÍDOS
+# TESTAR DIFERENTES RUÍDOS (ISOLADOS POR TIPO)
 # =====================================================
 
 valores_p = [0.01, 0.1, 0.3, 0.5]
+tipos_ruido = ['X', 'Y', 'Z']
 
-for p in valores_p:
+for tipo in tipos_ruido:
+    for p in valores_p:
 
-    print("\n====================================")
-    print(f"Executando ruído p = {p}")
-    print("====================================")
+        print("\n====================================")
+        print(f"Executando ruído {tipo} com p = {p}")
+        print("====================================")
 
-    # -------------------------------------------------
-    # MODELO DE RUÍDO
-    # -------------------------------------------------
+        # -------------------------------------------------
+        # MODELO DE RUÍDO ISOLADO
+        # -------------------------------------------------
 
-    error_1q = pauli_error([
-        ('X', p/3),
-        ('Y', p/3),
-        ('Z', p/3),
-        ('I', 1-p)
-    ])
+        error_1q = pauli_error([
+            (tipo, p),
+            ('I', 1-p)
+        ])
 
-    error_2q = error_1q.tensor(error_1q)
+        error_2q = error_1q.tensor(error_1q)
 
-    noise_model = NoiseModel()
+        noise_model = NoiseModel()
 
-    noise_model.add_all_qubit_quantum_error(
-        error_1q,
-        ['h', 'x', 'z']
-    )
-
-    noise_model.add_all_qubit_quantum_error(
-        error_2q,
-        ['cx']
-    )
-
-    noisy_sim = AerSimulator(noise_model=noise_model)
-
-    # =================================================
-    # EXECUTAR CIRCUITOS
-    # =================================================
-
-    for qc, nome in circuitos:
-
-        # ---------------------------------------------
-        # IDEAL
-        # ---------------------------------------------
-
-        tqc_ideal = transpile(qc, ideal_sim)
-
-        result_ideal = ideal_sim.run(
-            tqc_ideal,
-            shots=shots
-        ).result()
-
-        counts_ideal = result_ideal.get_counts()
-
-        # ---------------------------------------------
-        # COM RUÍDO
-        # ---------------------------------------------
-
-        tqc_noisy = transpile(qc, noisy_sim)
-
-        result_noisy = noisy_sim.run(
-            tqc_noisy,
-            shots=shots
-        ).result()
-
-        counts_noisy = result_noisy.get_counts()
-
-        # ---------------------------------------------
-        # REAL
-        # ---------------------------------------------
-
-        counts_real = resultados_reais[nome]
-
-        # =================================================
-        # PRINT RESULTADOS
-        # =================================================
-
-        print(f"\nCircuito: {nome}")
-
-        print("Ideal:")
-        print(counts_ideal)
-
-        print("Ruído:")
-        print(counts_noisy)
-
-        print("Hardware Real:")
-        print(counts_real)
-
-        # =================================================
-        # HISTOGRAMA
-        # =================================================
-
-        fig = plot_histogram(
-            [
-                counts_ideal,
-                counts_noisy,
-                counts_real
-            ],
-            legend=[
-                'Ideal',
-                f'Ruído p={p}',
-                'Hardware Real'
-            ],
-            title=f'{nome} | p={p}',
-            figsize=(12,7)
+        noise_model.add_all_qubit_quantum_error(
+            error_1q,
+            ['h', 'x', 'z']
         )
 
-        nome_arquivo = f"graficos/{nome}_p_{p}.png"
+        noise_model.add_all_qubit_quantum_error(
+            error_2q,
+            ['cx']
+        )
 
-        fig.savefig(nome_arquivo)
+        noisy_sim = AerSimulator(noise_model=noise_model)
 
-        plt.close(fig)
+        # =================================================
+        # EXECUTAR CIRCUITOS
+        # =================================================
 
-        print(f"Gráfico salvo: {nome_arquivo}")
+        for qc, nome in circuitos:
+
+            # ---------------------------------------------
+            # IDEAL
+            # ---------------------------------------------
+
+            tqc_ideal = transpile(qc, ideal_sim)
+
+            result_ideal = ideal_sim.run(
+                tqc_ideal,
+                shots=shots
+            ).result()
+
+            counts_ideal = result_ideal.get_counts()
+
+            # ---------------------------------------------
+            # COM RUÍDO
+            # ---------------------------------------------
+
+            tqc_noisy = transpile(qc, noisy_sim)
+
+            result_noisy = noisy_sim.run(
+                tqc_noisy,
+                shots=shots
+            ).result()
+
+            counts_noisy = result_noisy.get_counts()
+
+            # ---------------------------------------------
+            # REAL
+            # ---------------------------------------------
+
+            counts_real = resultados_reais[nome]
+
+            # =================================================
+            # PRINT RESULTADOS
+            # =================================================
+
+            print(f"\nCircuito: {nome}")
+            print("Ideal:", counts_ideal)
+            print(f"Ruído ({tipo}):", counts_noisy)
+            print("Hardware Real:", counts_real)
+
+            # =================================================
+            # HISTOGRAMA
+            # =================================================
+
+            fig = plot_histogram(
+                [
+                    counts_ideal,
+                    counts_noisy,
+                    counts_real
+                ],
+                legend=[
+                    'Ideal',
+                    f'Ruído {tipo} (p={p})',
+                    'Hardware Real'
+                ],
+                title=f'{nome} | Ruído: {tipo} | Probabilidade: {p}',
+                figsize=(12,7)
+            )
+
+            # Nome do arquivo agora especifica o tipo de ruído e a probabilidade
+            nome_arquivo = f"graficos/{nome}_Ruido{tipo}_p_{p}.png"
+
+            fig.savefig(nome_arquivo)
+            plt.close(fig)
+
+            print(f"Gráfico salvo: {nome_arquivo}")
 
 print("\nTODAS AS EXECUÇÕES FINALIZADAS.")
